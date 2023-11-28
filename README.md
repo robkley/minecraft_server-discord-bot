@@ -12,9 +12,11 @@ The Discord Minecraft Server Bot is a Python-based Discord bot designed to enhan
 3. Grant the bot the necessary permissions to interact with the Minecraft server.
 4. Run the bot script to start the Discord Minecraft Server Bot.
 5. Start using the provided commands in your Discord server:
-    - `!mc clear` - Clears the weather on the local Minecraft server.
-    - `!mc day` - Sets the time to 'day' on the local Minecraft server.
-    - `!mc status`: Checks if the Minecraft server is running.
+    - `/mc clear` - Clears the weather.
+    - `/mc day` - Sets the time to 'day'.
+    - `/mc enable_daylight_cycle` - Enables the gamerule `doDaylightCycle`.
+    - `/mc disable_daylight_cycle` - Disables the gamerule `doDaylightCycle`.
+    - `/mc status`: Checks if the Minecraft server is running.
 
 ## Additional Information
 - Ensure the bot has the required permissions to communicate with the Minecraft server.
