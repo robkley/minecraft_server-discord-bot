@@ -28,7 +28,14 @@ def run():
         interaction: discord.Interaction, current: str
     ) -> typing.List[app_commands.Choice[str]]:
         data = []
-        for mc_command in ["clear", "day", "help", "status"]:
+        for mc_command in [
+            "clear",
+            "day",
+            "enable_daylight_cycle",
+            "disable_daylight_cycle",
+            "help",
+            "status",
+        ]:
             if current.lower() in mc_command.lower():
                 data.append(app_commands.Choice(name=mc_command, value=mc_command))
         return data
@@ -41,10 +48,16 @@ def run():
 :star: **Minecraft Server Bot Commands** :star:
 
 `/mc clear`
-Clears the weather on the local Minecraft server.
+Clears the weather.
 
 `/mc day`
-Sets the time to 'day' on the local Minecraft server.
+Sets the time to 'day'.
+
+`/mc enable_daylight_cycle`
+Enables the gamerule `doDaylightCycle`.
+
+`/mc disable_daylight_cycle`
+Disables the gamerule `doDaylightCycle`.
 
 `/mc status`
 Checks if the Minecraft server is running.
@@ -56,7 +69,12 @@ Checks if the Minecraft server is running.
 Feel free to reach out if you have any questions or need assistance! Happy crafting! :tools::joystick:
 """
 
-        elif mc_command in ("clear", "day"):
+        elif mc_command in (
+            "clear",
+            "day",
+            "enable_daylight_cycle",
+            "disable_daylight_cycle",
+        ):
             try:
                 docker_client = docker.from_env()
                 container = docker_client.containers.get(CONTAINER_NAME)
@@ -70,6 +88,21 @@ Feel free to reach out if you have any questions or need assistance! Happy craft
                     execute_command = "time set day"
                     exec_result = container.exec_run(
                         ["mc-send-to-console", "time", "set", "day"]
+                    )
+                elif mc_command in ("enable_daylight_cycle", "disable_daylight_cycle"):
+                    daylight_cycle = ""
+                    if mc_command == "enable_daylight_cycle":
+                        daylight_cycle = "true"
+                    elif mc_command == "disable_daylight_cycle":
+                        daylight_cycle = "false"
+                    execute_command = f"gamerule doDaylightCycle {daylight_cycle}"
+                    exec_result = container.exec_run(
+                        [
+                            "mc-send-to-console",
+                            "gamerule",
+                            "doDaylightCycle",
+                            daylight_cycle,
+                        ]
                     )
                 output = exec_result.output.decode("utf-8")
                 exit_status = exec_result.exit_code
@@ -102,7 +135,7 @@ Feel free to reach out if you have any questions or need assistance! Happy craft
                 respond_message = (
                     f":question: The container `{CONTAINER_NAME}` does not exist."
                 )
-                respond_message += f"\n\n**CPU usage:** {psutil.cpu_percent(interval=1)} % ; **memory usage:** {psutil.virtual_memory().percent} %\n ; **disk usage:** {psutil.disk_usage('/').percent} %"
+                respond_message += f"\n\nCPU usage: {psutil.cpu_percent(interval=1)} % || memory usage: {psutil.virtual_memory().percent} % || disk usage: {psutil.disk_usage('/').percent} %"
             except Exception as e:
                 respond_message = f":octagonal_sign: An error occurred: {str(e)}"
 
