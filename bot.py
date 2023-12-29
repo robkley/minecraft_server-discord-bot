@@ -1,3 +1,5 @@
+from datetime import datetime
+from time import sleep
 import typing
 import os
 
@@ -33,17 +35,20 @@ def run():
             "day",
             "enable_daylight_cycle",
             "disable_daylight_cycle",
+            "creative",
+            "survival",
             "help",
             "status",
+            "resources",
         ]:
             if current.lower() in mc_command.lower():
                 data.append(app_commands.Choice(name=mc_command, value=mc_command))
         return data
 
     @bot.tree.command()
-    @app_commands.autocomplete(mc_command=command_autocompletion)
-    async def mc(interaction: discord.Interaction, mc_command: str):
-        if mc_command == "help":
+    @app_commands.autocomplete(discord_command_option=command_autocompletion)
+    async def mc(interaction: discord.Interaction, discord_command_option: str):
+        if discord_command_option == "help":
             respond_message = """
 :star: **Minecraft Server Bot Commands** :star:
 
@@ -59,8 +64,17 @@ Enables the gamerule `doDaylightCycle`.
 `/mc disable_daylight_cycle`
 Disables the gamerule `doDaylightCycle`.
 
+`/mc creative`
+Sets gamemode of user using the command to `creative`.
+
+`/mc survival`
+Sets gamemode of user using the command to `survival`.
+
 `/mc status`
-Checks if the Minecraft server is running.
+Checks if the Minecraft server is running and prints out resource information.
+
+`/mc resources`
+Prints out resource information for the server host system for 20 seconds every 2 seconds.
 
 :robot: **Additional Information:**
 - Make sure the bot has the necessary permissions to interact with the Minecraft server.
@@ -69,48 +83,78 @@ Checks if the Minecraft server is running.
 Feel free to reach out if you have any questions or need assistance! Happy crafting! :tools::joystick:
 """
 
-        elif mc_command in (
+        elif discord_command_option in (
             "clear",
             "day",
             "enable_daylight_cycle",
             "disable_daylight_cycle",
+            "creative",
+            "survival",
+            "resources",
         ):
             try:
                 docker_client = docker.from_env()
                 container = docker_client.containers.get(CONTAINER_NAME)
-                execute_command = ""
-                if mc_command == "clear":
-                    execute_command = "weather clear"
-                    exec_result = container.exec_run(
-                        ["mc-send-to-console", "weather", "clear"]
-                    )
-                elif mc_command == "day":
-                    execute_command = "time set day"
-                    exec_result = container.exec_run(
-                        ["mc-send-to-console", "time", "set", "day"]
-                    )
-                elif mc_command in ("enable_daylight_cycle", "disable_daylight_cycle"):
-                    daylight_cycle = ""
-                    if mc_command == "enable_daylight_cycle":
-                        daylight_cycle = "true"
-                    elif mc_command == "disable_daylight_cycle":
-                        daylight_cycle = "false"
-                    execute_command = f"gamerule doDaylightCycle {daylight_cycle}"
-                    exec_result = container.exec_run(
-                        [
-                            "mc-send-to-console",
-                            "gamerule",
-                            "doDaylightCycle",
-                            daylight_cycle,
-                        ]
-                    )
-                output = exec_result.output.decode("utf-8")
-                exit_status = exec_result.exit_code
+                execute_command = True
+                mc_command = ""
+                if discord_command_option == "clear":
+                    mc_command = f"weather {discord_command_option}"
+                    command_args = [
+                        "mc-send-to-console",
+                        "weather",
+                        discord_command_option,
+                    ]
 
-                if exit_status == 0:
-                    respond_message = f":white_check_mark: Command `{execute_command}` successfully executed!"
-                else:
-                    respond_message = f":octagonal_sign: Command `{execute_command}` exited with an error (status code: {exit_status})."
+                elif discord_command_option == "day":
+                    mc_command = f"time set {discord_command_option}"
+                    command_args = [
+                        "mc-send-to-console",
+                        "time",
+                        "set",
+                        discord_command_option,
+                    ]
+                elif discord_command_option in (
+                    "enable_daylight_cycle",
+                    "disable_daylight_cycle",
+                ):
+                    daylight_cycle = ""
+                    if discord_command_option == "enable_daylight_cycle":
+                        daylight_cycle = "true"
+                    elif discord_command_option == "disable_daylight_cycle":
+                        daylight_cycle = "false"
+                    mc_command = f"gamerule doDaylightCycle {daylight_cycle}"
+                    command_args = [
+                        "mc-send-to-console",
+                        "gamerule",
+                        "doDaylightCycle",
+                        daylight_cycle,
+                    ]
+                elif discord_command_option in ("creative", "survival"):
+                    match interaction.message.author.name:
+                        case "discord_user":
+                            mc_user = "mc_user."
+                        case _:
+                            mc_user = ""
+                    if mc_user == "":
+                        respond_message = f":octagonal_sign: Couldn't map Discord user `{interaction.message.author.name}` to a Minecraft player."
+                        execute_command = False
+                    mc_command = f"gamemode {discord_command_option} {mc_user}"
+                    command_args = [
+                        "mc-send-to-console",
+                        "gamemode",
+                        discord_command_option,
+                        mc_user,
+                    ]
+
+                if execute_command:
+                    exec_result = container.exec_run(command_args)
+                    output = exec_result.output.decode("utf-8")
+                    exit_status = exec_result.exit_code
+
+                    if exit_status == 0:
+                        respond_message = f":white_check_mark: Command `{mc_command}` successfully executed!"
+                    else:
+                        respond_message = f":octagonal_sign: Command `{mc_command}` exited with an error (status code: {exit_status})."
 
             except docker.errors.NotFound:
                 respond_message = (
@@ -119,7 +163,7 @@ Feel free to reach out if you have any questions or need assistance! Happy craft
             except Exception as e:
                 respond_message = f":octagonal_sign: An error occurred: {str(e)}"
 
-        elif mc_command == "status":
+        elif discord_command_option == "status":
             try:
                 docker_client = docker.from_env()
                 container = docker_client.containers.get(CONTAINER_NAME)
@@ -130,16 +174,45 @@ Feel free to reach out if you have any questions or need assistance! Happy craft
                 else:
                     respond_message = f":octagonal_sign: The container `{CONTAINER_NAME}` is not running."
 
-                respond_message += f"\n\n**CPU usage:** {psutil.cpu_percent(interval=1)} % ; **memory usage:** {psutil.virtual_memory().percent} %\n ; **disk usage:** {psutil.disk_usage('/').percent} %"
+                respond_message += {
+                    "\n```yaml\n"
+                    f"CPU usage:    {psutil.cpu_percent(interval=1)} %\n"
+                    f"Memory usage: {psutil.virtual_memory().percent}%\n"
+                    f"Disk usage:   {psutil.disk_usage('/').percent}%\n"
+                    "```"
+                }
             except docker.errors.NotFound:
                 respond_message = (
                     f":question: The container `{CONTAINER_NAME}` does not exist."
                 )
-                respond_message += f"\n\nCPU usage: {psutil.cpu_percent(interval=1)} % || memory usage: {psutil.virtual_memory().percent} % || disk usage: {psutil.disk_usage('/').percent} %"
+                respond_message += {
+                    "\n```yaml\n"
+                    f"CPU usage:    {psutil.cpu_percent(interval=1)} %\n"
+                    f"Memory usage: {psutil.virtual_memory().percent}%\n"
+                    f"Disk usage:   {psutil.disk_usage('/').percent}%\n"
+                    "```"
+                }
             except Exception as e:
                 respond_message = f":octagonal_sign: An error occurred: {str(e)}"
 
-        await interaction.response.send_message(f"{respond_message}")
+        elif discord_command_option == "resources":
+            for i in range(0, 10):
+                try:
+                    respond_message = {
+                        f":information_source: Check after {i * 2} seconds ({datetime.now().strftime('%d.%m.%Y %H:%M:%S')})\n"
+                        "```yaml\n"
+                        f"CPU usage:    {psutil.cpu_percent(interval=1)} %\n"
+                        f"Memory usage: {psutil.virtual_memory().percent}%\n"
+                        f"Disk usage:   {psutil.disk_usage('/').percent}%\n"
+                        "```"
+                    }
+                except Exception as e:
+                    respond_message = f":octagonal_sign: An error occurred: {str(e)}"
+                await interaction.response.send_message(f"{respond_message}")
+                sleep(2)
+
+        if discord_command_option != "resources":
+            await interaction.response.send_message(f"{respond_message}")
 
     bot.run(settings.DISCORD_API_SECRET, root_logger=True)
 
